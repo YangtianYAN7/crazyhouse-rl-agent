@@ -1,38 +1,20 @@
-PIECES = ['P', 'N', 'B', 'R', 'Q']  
+import chess
 
-def get_all_possible_actions():
-    actions = []
+def encode_action(move: chess.Move) -> int:
+    """
+    将 chess.Move 编码为整数索引。
+    编码方式：from_square * 64 + to_square （最多 64*64 = 4096 种动作）
+    """
+    return move.from_square * 64 + move.to_square
 
-    for from_x in range(8):
-        for from_y in range(8):
-            for to_x in range(8):
-                for to_y in range(8):
-                    if (from_x, from_y) != (to_x, to_y):
-                        actions.append(('move', (from_x, from_y), (to_x, to_y)))
+def decode_action(action_index: int) -> chess.Move:
+    """
+    将整数动作索引解码为 chess.Move。
+    解码方式与 encode_action 对应。
+    """
+    from_square = action_index // 64
+    to_square = action_index % 64
+    return chess.Move(from_square, to_square)
 
-    for piece in PIECES:
-        for x in range(8):
-            for y in range(8):
-                actions.append(('drop', piece, (x, y)))
-    return actions
 
-ALL_ACTIONS = get_all_possible_actions()
-ACTION_TO_INDEX = {action: idx for idx, action in enumerate(ALL_ACTIONS)}
-INDEX_TO_ACTION = {idx: action for idx, action in enumerate(ALL_ACTIONS)}
-
-def encode_action(action):
-    return ACTION_TO_INDEX.get(action, -1)  
-
-def decode_index(index):
-    return INDEX_TO_ACTION.get(index, None)
-
-def legal_action_indices(legal_actions):
-    return [encode_action(a) for a in legal_actions if encode_action(a) >= 0]
-
-if __name__ == '__main__':
-    print(f"Total encoded actions: {len(ALL_ACTIONS)}")
-    sample = ('drop', 'N', (3, 4))
-    idx = encode_action(sample)
-    print(f"Action {sample} -> Index {idx}")
-    print(f"Index {idx} -> Action {decode_index(idx)}")
     
