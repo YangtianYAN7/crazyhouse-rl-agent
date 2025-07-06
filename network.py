@@ -1,19 +1,23 @@
-import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
-class ActorCriticNet(nn.Module):
-    def __init__(self, input_size=768, hidden_size=128, action_size=4672):
-        super(ActorCriticNet, self).__init__()
-        self.fc1 = nn.Linear(input_size, hidden_size)
-        self.policy_head = nn.Linear(hidden_size, action_size)
-        self.value_head = nn.Linear(hidden_size, 1)
+class ActorCritic(nn.Module):
+    def __init__(self, input_dim=773, hidden_dim=512, action_dim=4672):
+        super(ActorCritic, self).__init__()
+        self.shared = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU()
+        )
+        self.actor = nn.Linear(hidden_dim, action_dim)
+        self.critic = nn.Linear(hidden_dim, 1)
 
     def forward(self, x):
-        x = F.relu(self.fc1(x))
-        policy_logits = self.policy_head(x)
-        value = self.value_head(x)
-        return policy_logits, value
+        x = self.shared(x)
+        return self.actor(x), self.critic(x)
+
+
+
+
+
 
 
 
