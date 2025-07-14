@@ -1,18 +1,30 @@
+import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 class ActorCritic(nn.Module):
-    def __init__(self, input_dim=773, hidden_dim=512, action_dim=4672):
+    def __init__(self, input_shape, n_actions):
         super(ActorCritic, self).__init__()
+
+        self.flatten = nn.Flatten()
+        flattened_size = input_shape[0] * input_shape[1] * input_shape[2]
+
         self.shared = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),
-            nn.ReLU()
+            self.flatten,
+            nn.Linear(flattened_size, 512),
+            nn.ReLU(),
         )
-        self.actor = nn.Linear(hidden_dim, action_dim)
-        self.critic = nn.Linear(hidden_dim, 1)
+
+        self.actor = nn.Linear(512, n_actions)
+        self.critic = nn.Linear(512, 1)
 
     def forward(self, x):
+        #print("DEBUG: input shape:", x.shape)  # 调试用，训练完成后可删除
         x = self.shared(x)
-        return self.actor(x), self.critic(x)
+        logits = self.actor(x)
+        value = self.critic(x)
+        return logits, value
+
 
 
 
