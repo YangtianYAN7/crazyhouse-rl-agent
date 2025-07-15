@@ -20,7 +20,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 writer = SummaryWriter(log_dir="runs")
 
 # 设置训练轮数
-num_episodes = 50  # 你当前要求训练 n 轮
+num_episodes = 5  # 你当前要求训练 n 轮
 
 for episode in range(num_episodes):
     obs = env.reset()
@@ -73,6 +73,10 @@ writer.close()
 os.makedirs("checkpoints", exist_ok=True)
 torch.save(model.state_dict(), "checkpoints/model.pth")
 print("模型已保存至 checkpoints/model.pth")
+
+
+
+
 
 
 
