@@ -19,7 +19,7 @@ model = ActorCritic(input_shape, n_actions).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 writer = SummaryWriter(log_dir="runs")
 
-num_episodes = 1000
+num_episodes = 10000
 
 for episode in range(num_episodes):
     obs = env.reset()
