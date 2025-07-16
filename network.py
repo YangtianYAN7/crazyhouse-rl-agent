@@ -1,3 +1,4 @@
+# network.py
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -5,13 +6,15 @@ import torch.nn.functional as F
 class ActorCritic(nn.Module):
     def __init__(self, input_shape, n_actions):
         super(ActorCritic, self).__init__()
-
-        self.flatten = nn.Flatten()
-        flattened_size = input_shape[0] * input_shape[1] * input_shape[2]
+        c, h, w = input_shape
 
         self.shared = nn.Sequential(
-            self.flatten,
-            nn.Linear(flattened_size, 512),
+            nn.Conv2d(c, 32, kernel_size=3, padding=1),  # 输出 [32, 8, 8]
+            nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=3, padding=1), # 输出 [64, 8, 8]
+            nn.ReLU(),
+            nn.Flatten(),                                # 输出 64*8*8 = 4096
+            nn.Linear(4096, 512),
             nn.ReLU(),
         )
 
@@ -19,11 +22,12 @@ class ActorCritic(nn.Module):
         self.critic = nn.Linear(512, 1)
 
     def forward(self, x):
-        #print("DEBUG: input shape:", x.shape)  # 调试用，训练完成后可删除
         x = self.shared(x)
         logits = self.actor(x)
         value = self.critic(x)
         return logits, value
+
+
 
 
 
