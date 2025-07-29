@@ -1,46 +1,71 @@
-# action_encoder.py
+# action_encoder.py - 完整包含所有 Crazyhouse 动作，无需提前合法性判断
 
 import chess
 
-# 构造包含升变的固定动作集合
 ALL_POSSIBLE_MOVES = []
 
-promotion_pieces = ['q', 'r', 'b', 'n']
-
-for from_square in range(64):
-    for to_square in range(64):
-        if from_square == to_square:
+# 构造 drop 动作（P/N/B/R/Q @ 任意可落子格）
+drop_pieces = [chess.PAWN, chess.KNIGHT, chess.BISHOP, chess.ROOK, chess.QUEEN]
+for pt in drop_pieces:
+    for to_sq in range(64):
+        # 跳过兵掉到第1/第8排（实际对局规则禁止）
+        rank = chess.square_rank(to_sq)
+        if pt == chess.PAWN and (rank == 0 or rank == 7):
             continue
-        move = chess.Move(from_square, to_square)
-        move_str = move.uci()
-        ALL_POSSIBLE_MOVES.append(move_str)
+        drop_move = chess.Move(from_square=None, to_square=to_sq, drop=pt)
+        ALL_POSSIBLE_MOVES.append(drop_move.uci())
 
-        # 添加升变走法（仅在第7排到8排或2排到1排才有升变可能）
-        if chess.square_rank(from_square) == 6 and chess.square_rank(to_square) == 7:
-            for promo in promotion_pieces:
-                move = chess.Move(from_square, to_square, promotion=chess.Piece.from_symbol(promo.upper()).piece_type)
-                ALL_POSSIBLE_MOVES.append(move.uci())
-        if chess.square_rank(from_square) == 1 and chess.square_rank(to_square) == 0:
-            for promo in promotion_pieces:
-                move = chess.Move(from_square, to_square, promotion=chess.Piece.from_symbol(promo.upper()).piece_type)
-                ALL_POSSIBLE_MOVES.append(move.uci())
+# 构造所有普通走子 + 升变
+for from_sq in range(64):
+    for to_sq in range(64):
+        if from_sq == to_sq:
+            continue
+        # 普通走子
+        move = chess.Move(from_sq, to_sq)
+        ALL_POSSIBLE_MOVES.append(move.uci())
+        # 升变走子
+        for promo in [chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT]:
+            promo_move = chess.Move(from_sq, to_sq, promotion=promo)
+            ALL_POSSIBLE_MOVES.append(promo_move.uci())
 
-# 添加一个 fallback 空动作
+# fallback 空动作
 ALL_POSSIBLE_MOVES.append("0000")
 
 def encode_action(board, legal_moves):
     return ALL_POSSIBLE_MOVES
 
 def decode_action(board, action_index):
-    legal_moves = list(board.legal_moves)
     move_str = ALL_POSSIBLE_MOVES[action_index]
-    for move in legal_moves:
-        if move.uci() == move_str:
-            return move
-    return legal_moves[0] if legal_moves else chess.Move.null()
+    try:
+        return chess.Move.from_uci(move_str)
+    except:
+        return chess.Move.null()
 
 def encode_action_index(board, move):
     return ALL_POSSIBLE_MOVES.index(move.uci())
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

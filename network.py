@@ -1,31 +1,49 @@
 # network.py
+
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+
+class ResBlock(nn.Module):
+    def __init__(self, channels):
+        super().__init__()
+        self.block = nn.Sequential(
+            nn.Conv2d(channels, channels, 3, padding=1),
+            nn.BatchNorm2d(channels),
+            nn.ReLU(),
+            nn.Conv2d(channels, channels, 3, padding=1),
+            nn.BatchNorm2d(channels)
+        )
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        return self.relu(x + self.block(x))
 
 class ActorCritic(nn.Module):
     def __init__(self, input_shape, n_actions):
-        super(ActorCritic, self).__init__()
+        super().__init__()
         c, h, w = input_shape
-
         self.shared = nn.Sequential(
-            nn.Conv2d(c, 32, kernel_size=3, padding=1),  # 输出 [32, 8, 8]
+            nn.Conv2d(c, 64, 3, padding=1),
+            nn.BatchNorm2d(64),
             nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=3, padding=1), # 输出 [64, 8, 8]
-            nn.ReLU(),
-            nn.Flatten(),                                # 输出 64*8*8 = 4096
-            nn.Linear(4096, 512),
-            nn.ReLU(),
+            ResBlock(64),
+            ResBlock(64),
+            nn.Flatten(),
+            nn.Linear(64 * h * w, 512),
+            nn.ReLU()
         )
-
         self.actor = nn.Linear(512, n_actions)
         self.critic = nn.Linear(512, 1)
 
     def forward(self, x):
         x = self.shared(x)
-        logits = self.actor(x)
-        value = self.critic(x)
-        return logits, value
+        return self.actor(x), self.critic(x)
+
+
+
+
+
+
 
 
 
