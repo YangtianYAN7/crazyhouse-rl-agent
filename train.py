@@ -23,7 +23,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 os.makedirs("checkpoints", exist_ok=True)
 writer = SummaryWriter(log_dir="runs")
 
-num_episodes = 10
+num_episodes = 500
 
 for episode in range(num_episodes):
     obs = env.reset()
