@@ -8,6 +8,7 @@ from crazyhouse_env import CrazyhouseEnv
 from network import ActorCritic
 from action_encoder import ALL_POSSIBLE_MOVES
 from collections import deque
+from evaluate import evaluate
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -102,10 +103,21 @@ for episode in range(num_episodes):
         torch.save(model.state_dict(), ckpt_path)
         print(f"✅ 已保存模型至 {ckpt_path}")
 
+    if (episode + 1) % 5 == 0:
+        model_path = f"checkpoints/epoch{episode+1}.pth"
+        torch.save(model.state_dict(), model_path)
+        print(f"📦 Saved model at {model_path}")
+        print(f"🧪 Evaluating model at epoch {episode+1}...")
+        evaluate(model_path, episodes=5)
+
 # 最终保存
 torch.save(model.state_dict(), "checkpoints/model.pth")
 writer.close()
 print("✅ 模型已保存至 checkpoints/model.pth")
+
+
+
+
 
 
 
