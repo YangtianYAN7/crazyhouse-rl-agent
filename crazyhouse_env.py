@@ -14,6 +14,16 @@ PIECE_VALUES = {
 }
 
 class CrazyhouseEnv:
+    def step_with_player(self, action_index, player_id):
+        """
+        Self-play模式下调用：强制让特定玩家（0表示白方，1表示黑方）下棋。
+        """
+        desired_color = (player_id == 0)
+        if self.board.turn != desired_color:
+            self.board.turn = desired_color  # 同步当前回合颜色
+
+        return self.step(action_index)
+
     def __init__(self):
         self.board = CrazyhouseBoard()
         self.update_action_space()
