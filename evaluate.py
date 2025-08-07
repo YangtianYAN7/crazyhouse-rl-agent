@@ -1,81 +1,96 @@
-# evaluate.py - self-play 对局 + Elo 评分
-
 import torch
+import numpy as np
 from crazyhouse_env import CrazyhouseEnv
 from network import ActorCritic
 from action_encoder import ALL_POSSIBLE_MOVES
-from elo import update_elo
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# 初始 Elo 分数（你也可以从文件中读取）
-current_elo = 1000
-opponent_elo = 1000
+def select_action(model, state, legal_actions):
+    with torch.no_grad():
+        state = torch.tensor(state, dtype=torch.float32).unsqueeze(0).to(device)
+        logits, _ = model(state)
+        mask = torch.zeros(logits.shape[-1], device=device)
+        mask[legal_actions] = 1
+        masked_logits = logits + (mask + 1e-8).log()
+        probs = torch.softmax(masked_logits, dim=-1)
+        dist = torch.distributions.Categorical(probs)
+        action = dist.sample()
+        return action.item()
 
 def evaluate_with_elo(model_path, episodes=10):
-    global current_elo, opponent_elo
-
-    env = CrazyhouseEnv()
-    input_shape = env.get_observation().shape
+    input_shape = (11, 8, 8)
     n_actions = len(ALL_POSSIBLE_MOVES)
 
-    model = ActorCritic(input_shape, n_actions).to(device)
-    model.load_state_dict(torch.load(model_path, map_location=device))
-    model.eval()
+    # 加载被评估模型（最新模型）
+    current_model = ActorCritic(input_shape, n_actions).to(device)
+    current_model.load_state_dict(torch.load("checkpoints/model.pth", map_location=device))
+    current_model.eval()
 
+    # 加载对手模型（支持传入路径或模型对象）
     opponent_model = ActorCritic(input_shape, n_actions).to(device)
-    opponent_model.load_state_dict(model.state_dict())
+    if isinstance(model_path, str):
+        opponent_model.load_state_dict(torch.load(model_path, map_location=device))
+    else:
+        opponent_model.load_state_dict(model_path.state_dict())
     opponent_model.eval()
 
-    wins = 0
-    draws = 0
-    losses = 0
+    # 初始化 Elo
+    current_elo = 1000
+    opponent_elo = 1200
 
-    for i in range(episodes):
-        obs = env.reset()
+    def update_elo(wins, losses, draws, K=32):
+        expected_score = 1 / (1 + 10 ** ((opponent_elo - current_elo) / 400))
+        actual_score = (wins + 0.5 * draws) / (wins + losses + draws + 1e-8)
+        new_elo = current_elo + K * (actual_score - expected_score)
+        return round(new_elo)
+
+    results = []
+    rewards = []
+
+    for ep in range(episodes):
+        # 黑白交替
+        white_first = (ep % 2 == 0)
+        env = CrazyhouseEnv(allow_drops=True)
+        state = env.reset()
         done = False
-        current_player = 0  # 0=model, 1=opponent
+        total_reward = 0
 
         while not done:
-            obs_tensor = torch.tensor(obs, dtype=torch.float32).unsqueeze(0).to(device)
+            legal_actions = env.get_legal_action_indices()
+            if not legal_actions:
+                break
 
-            if current_player == 0:
-                with torch.no_grad():
-                    logits, _ = model(obs_tensor)
+            if (env.board.turn == white_first):  # 当前模型执子
+                action = select_action(current_model, state, legal_actions)
             else:
-                with torch.no_grad():
-                    logits, _ = opponent_model(obs_tensor)
+                action = select_action(opponent_model, state, legal_actions)
 
-            legal_mask = torch.zeros(n_actions).to(device)
-            legal_indices = env.get_legal_action_indices()
-            legal_mask[legal_indices] = 1
-            masked_logits = logits.masked_fill(legal_mask == 0, float('-inf'))
-            probs = torch.softmax(masked_logits, dim=-1)
+            next_state, reward, done, _ = env.step(action)
+            total_reward += reward
+            state = next_state
 
-            dist = torch.distributions.Categorical(probs)
-            action = dist.sample()
+        rewards.append(total_reward)
 
-            obs, reward, done, _ = env.step_with_player(action.item(), current_player)
-            current_player = 1 - current_player
-
-        # 最终奖励是输赢判断依据
-        if reward > 0:
-            wins += 1
-        elif reward < 0:
-            losses += 1
+        if reward == 1:
+            results.append(1 if env.board.turn != white_first else 0)  # 当前模型赢
+        elif reward == -1:
+            results.append(0 if env.board.turn != white_first else 1)  # 当前模型输
         else:
-            draws += 1
+            results.append(0.5)
 
-    win_rate = wins / episodes
-    draw_rate = draws / episodes
-    result_score = win_rate + 0.5 * draw_rate  # 等效得分
+        print(f"✅ Episode {ep + 1}: Reward = {reward:.2f}")
 
-    current_elo, opponent_elo = update_elo(current_elo, opponent_elo, result_score)
+    wins = sum(1 for r in results if r == 1)
+    losses = sum(1 for r in results if r == 0)
+    draws = sum(1 for r in results if r == 0.5)
 
-    print(f"✅ Evaluation complete: W {wins} / D {draws} / L {losses}")
-    print(f"📊 New Elo (Current vs Opponent): {int(current_elo)} vs {int(opponent_elo)}\n")
+    avg_reward = np.mean(rewards)
+    new_elo = update_elo(wins, losses, draws)
 
-    return current_elo, opponent_elo
+    print(f"\n🧠 Evaluation complete: {wins} W / {draws} D / {losses} L")
+    print(f"🎯 Avg reward = {avg_reward:.2f}")
+    print(f"📊 New Elo (Current vs Opponent): {new_elo} vs {opponent_elo}")
 
 
 
