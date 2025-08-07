@@ -1,5 +1,5 @@
 # train.py - 引入 self-play 机制进行强化学习训练
-
+from evaluate import evaluate_with_elo
 import torch
 import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
@@ -7,7 +7,7 @@ import os
 from crazyhouse_env import CrazyhouseEnv
 from network import ActorCritic
 from action_encoder import ALL_POSSIBLE_MOVES
-from evaluate import evaluate
+from evaluate import evaluate_with_elo
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -30,7 +30,7 @@ os.makedirs("checkpoints", exist_ok=True)
 writer = SummaryWriter(log_dir="runs")
 
 num_episodes = 500
-save_opponent_every = 20  # 每隔N局，将当前模型保存为对手
+save_opponent_every = 50  # 每隔N局，将当前模型保存为对手
 
 for episode in range(num_episodes):
     obs = env.reset()
@@ -108,9 +108,17 @@ for episode in range(num_episodes):
     writer.add_scalar("CriticLoss", total_critic_loss, episode)
     writer.add_scalar("Entropy", total_entropy, episode)
 
-    # 每 20 局更新对手模型
+    if (episode + 1) % 5 == 0:
+        model_path = f"checkpoints/epoch{episode+1}.pth"
+        torch.save(model.state_dict(), model_path)
+        print(f"📦 Saved model at {model_path}")
+        print(f"🧪 Evaluating model at epoch {episode+1} with Elo...")
+        evaluate_with_elo(model_path, episodes=10)
+
+    # 每 50 局更新对手模型
     if (episode + 1) % save_opponent_every == 0:
         opponent_model.load_state_dict(model.state_dict())
+        print(f"♻️ Updated opponent model at episode {episode+1}")
 
     # 每 100 局打印 top-5 策略
     if episode % 100 == 0:
@@ -125,13 +133,13 @@ for episode in range(num_episodes):
         torch.save(model.state_dict(), ckpt_path)
         print(f"✅ 已保存模型至 {ckpt_path}")
 
-    # 每 5 局保存并评估
-    if (episode + 1) % 5 == 0:
+    # 每 10 局保存并评估
+    if (episode + 1) % 10 == 0:
         model_path = f"checkpoints/epoch{episode+1}.pth"
         torch.save(model.state_dict(), model_path)
         print(f"📦 Saved model at {model_path}")
         print(f"🧪 Evaluating model at epoch {episode+1}...")
-        evaluate(model_path, episodes=5)
+        evaluate_with_elo(model_path, episodes=5)
 
 # 最终保存
 torch.save(model.state_dict(), "checkpoints/model.pth")

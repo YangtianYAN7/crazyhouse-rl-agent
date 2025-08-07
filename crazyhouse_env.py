@@ -67,7 +67,7 @@ class CrazyhouseEnv:
 
         # 胜负判断
         if self.board.is_checkmate():
-            reward += 1.0 + (60 - self.step_count) * 0.02  # 胜利越早奖励越高
+            reward += 5.0 + (60 - self.step_count) * 0.1  # 更大胜利奖励
             return self.get_observation(), reward, True, {}
         if self.board.is_stalemate() or self.board.is_insufficient_material():
             return self.get_observation(), -0.2, True, {}  # 和棋轻微负分
@@ -83,7 +83,7 @@ class CrazyhouseEnv:
         # 库存利用奖励（掉落棋子）
         new_pockets = self.count_pockets()
         if new_pockets < prev_pockets:
-            reward += (prev_pockets - new_pockets) * 0.05
+            reward += (prev_pockets - new_pockets) * 0.2
 
         # 控制中心格奖励
         center = [chess.D4, chess.E4, chess.D5, chess.E5]
