@@ -1,9 +1,17 @@
-# crazyhouse_env.py - 支持真正的 Crazyhouse 落子规则
+# crazyhouse_env.py - 增强版 Crazyhouse 奖励逻辑
 
 import chess
 import numpy as np
 from chess.variant import CrazyhouseBoard
 from action_encoder import encode_action, decode_action, ALL_POSSIBLE_MOVES
+
+PIECE_VALUES = {
+    chess.PAWN: 1,
+    chess.KNIGHT: 3,
+    chess.BISHOP: 3,
+    chess.ROOK: 5,
+    chess.QUEEN: 9
+}
 
 class CrazyhouseEnv:
     def __init__(self):
@@ -12,6 +20,7 @@ class CrazyhouseEnv:
         self.observation_space = type('', (), {})()
         self.observation_space.shape = (11, 8, 8)
         self.step_count = 0
+        self.last_check = False
 
     def update_action_space(self):
         self.action_space = type('', (), {})()
@@ -20,16 +29,21 @@ class CrazyhouseEnv:
     def reset(self):
         self.board = CrazyhouseBoard()
         self.step_count = 0
+        self.last_check = False
         self.update_action_space()
         return self.get_observation()
 
     def step(self, action_index):
         move = decode_action(self.board, action_index)
 
+        # 非法走子
         if move not in self.board.legal_moves:
             return self.get_observation(), -1.0, True, {}
 
         prev_material = self.count_material()
+        prev_pockets = self.count_pockets()
+        prev_step = self.step_count
+
         self.board.push(move)
         self.step_count += 1
         self.update_action_space()
@@ -37,33 +51,72 @@ class CrazyhouseEnv:
         reward = 0.0
         done = False
 
-        if self.step_count >= 50:
+        # 结束条件
+        if self.step_count >= 60:
             return self.get_observation(), -1.0, True, {}
 
+        # 胜负判断
         if self.board.is_checkmate():
-            return self.get_observation(), 1.0, True, {}
+            reward += 1.0 + (60 - self.step_count) * 0.02  # 胜利越早奖励越高
+            return self.get_observation(), reward, True, {}
         if self.board.is_stalemate() or self.board.is_insufficient_material():
-            return self.get_observation(), 0.0, True, {}
+            return self.get_observation(), -0.2, True, {}  # 和棋轻微负分
 
+        # 每步基础奖励
         reward += 0.005
 
+        # 吃子奖励（按价值）
         new_material = self.count_material()
         if new_material < prev_material:
-            reward += 0.5
+            reward += abs(prev_material - new_material) * 0.1
 
+        # 库存利用奖励（掉落棋子）
+        new_pockets = self.count_pockets()
+        if new_pockets < prev_pockets:
+            reward += (prev_pockets - new_pockets) * 0.05
+
+        # 控制中心格奖励
         center = [chess.D4, chess.E4, chess.D5, chess.E5]
         reward += 0.05 * sum([self.board.is_attacked_by(self.board.turn, sq) for sq in center])
 
+        # 控制敌王周围格奖励
+        opp_king_square = self.get_opponent_king_square()
+        if opp_king_square is not None:
+            king_neighbors = [sq for sq in chess.SQUARES if chess.square_distance(sq, opp_king_square) == 1]
+            reward += 0.03 * sum([self.board.is_attacked_by(self.board.turn, sq) for sq in king_neighbors])
+
+        # 将军奖励（连续将军加成）
         if self.board.is_check():
             reward += 0.3
+            if self.last_check:
+                reward += 0.1  # 连续将军额外奖励
+            self.last_check = True
+        else:
+            self.last_check = False
+
+        # 步数惩罚（避免拖棋）
+        if self.step_count > 40:
+            reward -= 0.01 * (self.step_count - 40)
 
         return self.get_observation(), reward, done, {}
 
     def count_material(self):
-        return sum(piece.piece_type in [chess.PAWN, chess.KNIGHT, chess.BISHOP,
-                                        chess.ROOK, chess.QUEEN]
+        """计算对手在场棋子总价值"""
+        return sum(PIECE_VALUES[piece.piece_type]
                    for piece in self.board.piece_map().values()
-                   if piece.color != self.board.turn)
+                   if piece.color != self.board.turn and piece.piece_type in PIECE_VALUES)
+
+    def count_pockets(self):
+        """计算库存总数"""
+        return sum(self.board.pockets[chess.WHITE].count(pt) + self.board.pockets[chess.BLACK].count(pt)
+                   for pt in PIECE_VALUES.keys())
+
+    def get_opponent_king_square(self):
+        """获取对方国王位置"""
+        for square, piece in self.board.piece_map().items():
+            if piece.piece_type == chess.KING and piece.color != self.board.turn:
+                return square
+        return None
 
     def get_observation(self):
         obs = np.zeros((11, 8, 8), dtype=np.float32)
@@ -87,6 +140,7 @@ class CrazyhouseEnv:
 
     def get_legal_action_indices(self):
         return [ALL_POSSIBLE_MOVES.index(move.uci()) for move in self.board.legal_moves]
+
 
 
 

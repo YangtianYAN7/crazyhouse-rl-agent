@@ -1,4 +1,4 @@
-# train.py（改进版，保留原功能 + 新增功能）
+# train.py - 适配改进网络结构（空间感知）
 
 import torch
 import torch.nn.functional as F
@@ -12,6 +12,7 @@ from evaluate import evaluate
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+# 初始化环境和模型
 env = CrazyhouseEnv()
 input_shape = env.get_observation().shape
 n_actions = len(ALL_POSSIBLE_MOVES)
@@ -50,7 +51,6 @@ for episode in range(num_episodes):
         masked_logits = logits.masked_fill(legal_mask == 0, float('-inf'))
         probs = torch.softmax(masked_logits, dim=-1)
 
-        # 若产生 nan/inf，跳过该步
         if torch.isnan(probs).any() or torch.isinf(probs).any():
             print("⚠️ Invalid probs detected, skipping step.")
             break
@@ -81,7 +81,7 @@ for episode in range(num_episodes):
         total_entropy += entropy.item()
         obs = next_obs
 
-    # 日志输出
+    # 日志记录
     print(f"🎯 Episode {episode} | Reward: {total_reward:.2f} | Loss: {total_loss:.4f}")
 
     writer.add_scalar("Reward", total_reward, episode)
@@ -90,7 +90,7 @@ for episode in range(num_episodes):
     writer.add_scalar("CriticLoss", total_critic_loss, episode)
     writer.add_scalar("Entropy", total_entropy, episode)
 
-    # 每 100 局输出一次动作分布前 5（调试策略是否合理）
+    # 每 100 局输出策略 top-5（用于调试）
     if episode % 100 == 0:
         topk = torch.topk(probs.squeeze(0), 5)
         print("🧠 Top-5 Actions:")
@@ -103,6 +103,7 @@ for episode in range(num_episodes):
         torch.save(model.state_dict(), ckpt_path)
         print(f"✅ 已保存模型至 {ckpt_path}")
 
+    # 每 5 局保存并评估一次模型
     if (episode + 1) % 5 == 0:
         model_path = f"checkpoints/epoch{episode+1}.pth"
         torch.save(model.state_dict(), model_path)
@@ -114,6 +115,8 @@ for episode in range(num_episodes):
 torch.save(model.state_dict(), "checkpoints/model.pth")
 writer.close()
 print("✅ 模型已保存至 checkpoints/model.pth")
+
+
 
 
 
